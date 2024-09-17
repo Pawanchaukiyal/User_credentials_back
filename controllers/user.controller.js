@@ -116,15 +116,40 @@ const loginUser = asyncHandler(async (req, res) => {
     );
 });
 
-//logout endpoint
-const logoutUser = asyncHandler(async (req, res) => {
+// Logout function
+ const logoutUser = asyncHandler(async (req, res) => {
+  // Clear the cookies
+  res.clearCookie('accessToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+  res.status(200).json({ message: 'Logged out successfully' });
+});
+
+// Middleware to verify JWT
+export const verifyJWT = asyncHandler(async (req, res, next) => {
+  // Get the token from cookies or Authorization header
+  const token = req.cookies?.accessToken || req.header('Authorization')?.replace('Bearer ', '');
+
+  if (!token) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
   try {
-    res.clearCookie('accessToken'); // Clear the cookie on logout
-    res.status(200).json({ message: 'Logged out successfully!' });
+    // Verify token
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    // Fetch user from database
+    const user = await User.findById(decodedToken._id).select('-password -refreshToken');
+    
+    if (!user) {
+      throw new ApiError(401, "Invalid Access Token");
+    }
+
+    // Attach user to request object
+    req.user = user;
+    next();
   } catch (error) {
-    throw new ApiError(500, "Logout failed");
+    throw new ApiError(401, error?.message || "Invalid Access Token");
   }
 });
+
 
 //refresh token
 const refreshAccessToken = asyncHandler(async (req, res) => {
